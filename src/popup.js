@@ -33,12 +33,18 @@ launchReportButton.addEventListener('click', async () => {
   launchReportButton.disabled = true;
   status.textContent = 'Opening report…';
   try {
-    const results = await executeOnActiveTab(() => {
-      const link = [...document.querySelectorAll('a')].find((candidate) => {
+    const results = await executeOnActiveTab(async () => {
+      const findReportLink = () => [...document.querySelectorAll('a')].find((candidate) => {
         const url = new URL(candidate.href, window.location.href);
         const id = [...url.searchParams.entries()].find(([key]) => key.toLowerCase() === 'id')?.[1];
         return url.pathname.toLowerCase().endsWith('/reports/customreport.aspx') && id === '1847';
       }) || document.querySelector('span[data-i18n="reportMenu:Dealership Sold Details"]')?.closest('a');
+      let link = findReportLink();
+      if (!link) {
+        document.querySelector('span#MenuSections_SectionLabel_11[title="Reports"], span[title="Reports"]')?.click();
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        link = findReportLink();
+      }
       if (!link) return false;
       link.click();
       return true;
