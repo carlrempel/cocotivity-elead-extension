@@ -19,9 +19,29 @@
       <section class="welcome" aria-labelledby="welcome-title">
         <p class="eyebrow">Report launcher</p>
         <h2 id="welcome-title">Dealership Sold Details</h2>
-        <p class="intro">Open the report from the active eLead tab. The report will ask for its required From and To dates.</p>
+        <p class="intro">Choose dates here, then open the report and fill its criteria page.</p>
+
+        <div class="date-fields">
+          <label for="start-date">From
+            <input id="start-date" name="startDate" type="text" inputmode="numeric" maxlength="10" placeholder="MM/DD/YYYY" autocomplete="off" required>
+          </label>
+          <label for="end-date">To
+            <input id="end-date" name="endDate" type="text" inputmode="numeric" maxlength="10" placeholder="MM/DD/YYYY" autocomplete="off" required>
+          </label>
+        </div>
+
+        <label class="criteria-field" for="vehicle-type">Vehicle Type
+          <select id="vehicle-type">
+            <option value="">All</option>
+            <option value="N">New</option>
+          </select>
+        </label>
 
         <button id="launch-report-button" type="button">Open report</button>
+        <button id="run-report-button" class="secondary" type="button">Run selected report</button>
+        <button id="capture-table-button" class="secondary" type="button">Capture current table</button>
+        <button id="copy-captures-button" class="secondary" type="button">Copy captures to clipboard</button>
+        <button id="export-captures-button" class="secondary" type="button">Export captures for ETL</button>
         <p id="status" class="status" role="status" aria-live="polite">Ready when you are.</p>
       </section>
 

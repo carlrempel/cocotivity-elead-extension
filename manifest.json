@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cocotivity eLead Extension",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Cocotivity eLead workflow extension.",
   "action": {
     "default_title": "Cocotivity eLead",
@@ -10,5 +10,5 @@
   "background": {
     "service_worker": "src/background.js"
   },
-  "permissions": ["storage", "activeTab", "scripting"]
+  "permissions": ["storage", "activeTab", "scripting", "downloads"]
 }

@@ -80,6 +80,55 @@ h2 {
   line-height: 1.5;
 }
 
+.date-fields {
+  display: grid;
+  gap: var(--cocotivity-space-3);
+  margin-bottom: var(--cocotivity-space-3);
+  grid-template-columns: 1fr 1fr;
+}
+
+.date-fields label {
+  color: var(--cocotivity-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.date-fields input {
+  width: 100%;
+  margin-top: var(--cocotivity-space-1);
+  padding: 9px 8px;
+  border: 1px solid var(--cocotivity-border);
+  border-radius: var(--cocotivity-radius);
+  background: var(--cocotivity-surface-strong);
+  color: var(--cocotivity-ink);
+  font: inherit;
+}
+
+.date-fields input:focus-visible {
+  outline: 3px solid var(--cocotivity-warning-border);
+  outline-offset: 1px;
+}
+
+.criteria-field {
+  display: block;
+  margin-bottom: var(--cocotivity-space-3);
+  color: var(--cocotivity-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.criteria-field select {
+  display: block;
+  width: 100%;
+  margin-top: var(--cocotivity-space-1);
+  padding: 9px 8px;
+  border: 1px solid var(--cocotivity-border);
+  border-radius: var(--cocotivity-radius);
+  background: var(--cocotivity-surface-strong);
+  color: var(--cocotivity-ink);
+  font: inherit;
+}
+
 button {
   width: 100%;
   padding: 11px 16px;
@@ -94,6 +143,13 @@ button {
 
 button:hover {
   filter: brightness(0.95);
+}
+
+button.secondary {
+  margin-top: var(--cocotivity-space-2);
+  border-color: var(--cocotivity-border);
+  background: var(--cocotivity-surface-strong);
+  color: var(--cocotivity-ink);
 }
 
 button:disabled {
