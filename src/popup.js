@@ -274,7 +274,9 @@ runReportButton.addEventListener('click', async () => {
     const vehicleType = vehicleTypeInput.value;
     await chrome.storage.local.set({ reportDates: { start: from, end: to }, vehicleType });
     let { currentRun } = await chrome.storage.local.get('currentRun');
-    if (!currentRun) {
+    const queue = await getQueue();
+    const isQueuedRun = currentRun && queue.some((run) => run.id === currentRun.id && run.status === 'running');
+    if (!isQueuedRun) {
       const selected = reportChecks.filter((check) => check.checked);
       if (selected.length !== 1) throw new Error('Select exactly one report, or add multiple reports to the queue first.');
       const check = selected[0];
@@ -282,7 +284,7 @@ runReportButton.addEventListener('click', async () => {
         id: crypto.randomUUID(),
         reportId: check.value,
         reportName: check.dataset.reportName,
-      vehicleType: vehicleType || 'All',
+        vehicleType: vehicleType || 'All',
         dateRange: { start: from, end: to },
         status: 'running'
       };
