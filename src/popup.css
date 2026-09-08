@@ -129,6 +129,52 @@ h2 {
   font: inherit;
 }
 
+.report-catalog {
+  display: grid;
+  gap: var(--cocotivity-space-2);
+  margin: 0 0 var(--cocotivity-space-3);
+  padding: var(--cocotivity-space-3);
+  border: 1px solid var(--cocotivity-border);
+  border-radius: var(--cocotivity-radius);
+}
+
+.report-catalog legend,
+.report-catalog label,
+.queue h3 {
+  color: var(--cocotivity-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.report-catalog label {
+  font-weight: 500;
+}
+
+.queue {
+  margin-bottom: var(--cocotivity-space-3);
+}
+
+.queue h3 {
+  margin: 0 0 var(--cocotivity-space-1);
+}
+
+.queue ol {
+  max-height: 110px;
+  margin: 0;
+  overflow: auto;
+  padding-left: 24px;
+  color: var(--cocotivity-muted);
+  font-size: 12px;
+}
+
+.queue li {
+  padding: 2px 0;
+}
+
+.queue li.complete {
+  color: var(--cocotivity-success);
+}
+
 button {
   width: 100%;
   padding: 11px 16px;

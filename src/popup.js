@@ -1,6 +1,8 @@
 const version = document.querySelector('#version');
 const launchReportButton = document.querySelector('#launch-report-button');
 const runReportButton = document.querySelector('#run-report-button');
+const addToQueueButton = document.querySelector('#add-to-queue-button');
+const runNextButton = document.querySelector('#run-next-button');
 const captureTableButton = document.querySelector('#capture-table-button');
 const copyCapturesButton = document.querySelector('#copy-captures-button');
 const copyDiagnosticButton = document.querySelector('#copy-diagnostic-button');
@@ -9,6 +11,8 @@ const startDateInput = document.querySelector('#start-date');
 const endDateInput = document.querySelector('#end-date');
 const vehicleTypeInput = document.querySelector('#vehicle-type');
 const status = document.querySelector('#status');
+const queueElement = document.querySelector('#run-queue');
+const reportChecks = [...document.querySelectorAll('[data-report-name]')];
 
 version.textContent = chrome.runtime.getManifest().version;
 
@@ -26,6 +30,30 @@ chrome.storage.local.get('vehicleType').then(({ vehicleType }) => {
   vehicleTypeInput.value = vehicleType ?? '';
 });
 
+const queueLabel = (run) => `${run.reportName} — ${run.vehicleType || 'default'} — ${run.dateRange.start}–${run.dateRange.end}`;
+
+async function getQueue() {
+  const { reportQueue = [] } = await chrome.storage.local.get('reportQueue');
+  return reportQueue;
+}
+
+async function renderQueue() {
+  const queue = await getQueue();
+  queueElement.replaceChildren();
+  if (!queue.length) {
+    queueElement.append(Object.assign(document.createElement('li'), { className: 'empty-queue', textContent: 'No runs queued.' }));
+    return;
+  }
+  for (const run of queue) {
+    const item = document.createElement('li');
+    item.textContent = `${run.status === 'complete' ? '✓ ' : ''}${queueLabel(run)}${run.status === 'running' ? ' (running)' : ''}`;
+    if (run.status === 'complete') item.className = 'complete';
+    queueElement.append(item);
+  }
+}
+
+renderQueue();
+
 function readDates() {
   const dates = [startDateInput.value.trim(), endDateInput.value.trim()];
   if (!dates.every((date) => /^\d{2}\/\d{2}\/\d{4}$/.test(date))) throw new Error('Enter both dates as MM/DD/YYYY.');
@@ -38,16 +66,65 @@ async function executeOnActiveTab(func, args = []) {
   return chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, func, args });
 }
 
+addToQueueButton.addEventListener('click', async () => {
+  try {
+    const [start, end] = readDates();
+    const vehicleType = vehicleTypeInput.value;
+    const selected = reportChecks.filter((check) => check.checked);
+    if (!selected.length) throw new Error('Select at least one report first.');
+    const existing = await getQueue();
+    const additions = selected.map((check) => ({
+      id: crypto.randomUUID(),
+      reportId: check.value,
+      reportName: check.dataset.reportName,
+      vehicleType: check.value === '1847' ? (vehicleType || 'All') : 'default',
+      dateRange: { start, end },
+      status: 'queued'
+    }));
+    await chrome.storage.local.set({ reportQueue: [...existing, ...additions] });
+    await renderQueue();
+    status.textContent = `Added ${additions.length} run(s) to the queue.`;
+  } catch (error) {
+    status.textContent = error.message;
+  }
+});
+
+runNextButton.addEventListener('click', async () => {
+  try {
+    const queue = await getQueue();
+    const next = queue.find((run) => run.status === 'queued');
+    if (!next) throw new Error('The run queue is empty.');
+    await chrome.storage.local.set({ currentRun: next, reportDates: next.dateRange, vehicleType: next.vehicleType === 'All' ? '' : next.vehicleType });
+    await chrome.storage.local.set({ reportQueue: queue.map((run) => run.id === next.id ? { ...run, status: 'running' } : run) });
+    await renderQueue();
+    startDateInput.value = next.dateRange.start;
+    endDateInput.value = next.dateRange.end;
+    vehicleTypeInput.value = next.vehicleType === 'All' ? '' : next.vehicleType;
+    if (next.reportId === '1847') {
+      status.textContent = 'Running the next queued report…';
+      runReportButton.click();
+    } else {
+      status.textContent = `${next.reportName} opened. Configure its report-specific criteria, then run it.`;
+      launchReportButton.click();
+    }
+  } catch (error) {
+    status.textContent = error.message;
+  }
+});
+
 launchReportButton.addEventListener('click', async () => {
   launchReportButton.disabled = true;
   status.textContent = 'Opening report…';
   try {
-    const results = await executeOnActiveTab(async () => {
+    const { currentRun } = await chrome.storage.local.get('currentRun');
+    const reportId = currentRun?.reportId || '1847';
+    const reportName = currentRun?.reportName || 'Dealership Sold Details';
+    const results = await executeOnActiveTab(async (selectedReportId, selectedReportName) => {
       const findReportLink = () => [...document.querySelectorAll('a')].find((candidate) => {
         const url = new URL(candidate.href, window.location.href);
         const id = [...url.searchParams.entries()].find(([key]) => key.toLowerCase() === 'id')?.[1];
-        return url.pathname.toLowerCase().endsWith('/reports/customreport.aspx') && id === '1847';
-      }) || document.querySelector('span[data-i18n="reportMenu:Dealership Sold Details"]')?.closest('a');
+        return url.pathname.toLowerCase().endsWith('/reports/customreport.aspx') && id === selectedReportId;
+      }) || document.querySelector(`span[data-i18n="reportMenu:${selectedReportName}"]`)?.closest('a');
       let link = findReportLink();
       if (!link) {
         document.querySelector('span#MenuSections_SectionLabel_11[title="Reports"], span[title="Reports"]')?.click();
@@ -61,7 +138,7 @@ launchReportButton.addEventListener('click', async () => {
       if (!link) return false;
       link.click();
       return true;
-    });
+    }, [reportId, reportName]);
     status.textContent = results.some(({ result }) => result) ? 'Report opened. Reopen this panel on its criteria page.' : 'Report link was not found on this eLead page.';
   } catch (error) {
     status.textContent = `Could not open report: ${error.message}`;
@@ -119,7 +196,7 @@ captureTableButton.addEventListener('click', async () => {
   captureTableButton.disabled = true;
   status.textContent = 'Capturing result table…';
   try {
-    const { reportDates, vehicleType } = await chrome.storage.local.get(['reportDates', 'vehicleType']);
+    const { reportDates, vehicleType, currentRun } = await chrome.storage.local.get(['reportDates', 'vehicleType', 'currentRun']);
     if (!reportDates?.start || !reportDates?.end) throw new Error('Run a report with dates before capturing.');
     const results = await executeOnActiveTab(() => {
       const tables = [...document.querySelectorAll('table')].map((table) => [...table.querySelectorAll('tr')]).filter((rows) => rows.length).sort((a, b) => b.length - a.length);
@@ -127,11 +204,19 @@ captureTableButton.addEventListener('click', async () => {
     });
     const rows = results.find(({ result }) => Array.isArray(result))?.result;
     if (!rows) throw new Error('No result table was found on this page.');
-    const key = `dealership-sold-details|vehicleType=${vehicleType || 'All'}|${reportDates.start}|${reportDates.end}`;
+    const reportName = currentRun?.reportName || 'Dealership Sold Details';
+    const reportId = currentRun?.reportId || '1847';
+    const criteriaValue = currentRun?.vehicleType || vehicleType || 'All';
+    const key = `${reportId}|${reportName}|${criteriaValue}|${reportDates.start}|${reportDates.end}`;
     const saved = await chrome.storage.local.get('reportCaptures');
     const captures = saved.reportCaptures || {};
-    captures[key] = { key, reportName: 'Dealership Sold Details', criteria: { vehicleType: vehicleType || 'All' }, dateRange: reportDates, capturedAt: new Date().toISOString(), rows };
+    captures[key] = { key, reportName, criteria: { vehicleType: criteriaValue }, dateRange: reportDates, capturedAt: new Date().toISOString(), rows };
     await chrome.storage.local.set({ reportCaptures: captures });
+    if (currentRun) {
+      const queue = await getQueue();
+      await chrome.storage.local.set({ reportQueue: queue.map((run) => run.id === currentRun.id ? { ...run, status: 'complete' } : run), currentRun: null });
+      await renderQueue();
+    }
     status.textContent = `Captured ${rows.length} rows.`;
   } catch (error) {
     status.textContent = error.message;

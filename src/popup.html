@@ -37,8 +37,21 @@
           </select>
         </label>
 
+        <fieldset class="report-catalog">
+          <legend>Reports to run</legend>
+          <label><input type="checkbox" value="1847" data-report-name="Dealership Sold Details"> Dealership Sold Details</label>
+          <label><input type="checkbox" value="1387" data-report-name="Source and Sub-Source Performance"> Source and Sub-Source Performance</label>
+          <label><input type="checkbox" value="prospects-zip" data-report-name="Prospects by ZIP Code"> Prospects by ZIP Code</label>
+        </fieldset>
+        <button id="add-to-queue-button" class="secondary" type="button">Add selected to run queue</button>
+        <section class="queue" aria-labelledby="queue-title">
+          <h3 id="queue-title">Run queue</h3>
+          <ol id="run-queue"><li class="empty-queue">No runs queued.</li></ol>
+        </section>
+
         <button id="launch-report-button" type="button">Open report</button>
         <button id="run-report-button" class="secondary" type="button">Run selected report</button>
+        <button id="run-next-button" class="secondary" type="button">Run next queued report</button>
         <button id="capture-table-button" class="secondary" type="button">Capture current table</button>
         <button id="copy-captures-button" class="secondary" type="button">Copy captures to clipboard</button>
         <button id="copy-diagnostic-button" class="secondary" type="button">Copy diagnostic</button>
