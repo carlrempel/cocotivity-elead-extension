@@ -312,11 +312,18 @@ captureTableButton.addEventListener('click', async () => {
       if (!reportTable) return null;
       const sourceRows = [...reportTable.querySelectorAll(':scope > tbody > tr, :scope > tr')];
       const cellValues = (row) => [...row.children].filter((cell) => /^(TH|TD)$/.test(cell.tagName)).map((cell) => cell.innerText.trim());
-      const sourceHeaders = cellValues(sourceRows[0] || []);
+      const headerIndex = sourceRows.findIndex((row) => {
+        const values = cellValues(row);
+        return values.length > 0 && values.some((value) => desiredColumns?.includes(value));
+      });
+      const sourceHeaders = cellValues(sourceRows[headerIndex >= 0 ? headerIndex : 0] || []);
       const columnsToCapture = desiredColumns?.length ? desiredColumns : sourceHeaders;
       const indexes = columnsToCapture.map((column) => sourceHeaders.findIndex((header) => header === column));
       const missingColumns = desiredColumns?.length ? desiredColumns.filter((_, index) => indexes[index] === -1) : [];
-      const rows = sourceRows.map(cellValues).map((row) => indexes.filter((index) => index >= 0).map((index) => row[index] || ''));
+      const rows = sourceRows.slice(Math.max(0, headerIndex)).map(cellValues)
+        .map((row) => indexes.filter((index) => index >= 0).map((index) => row[index] || ''))
+        .filter((row) => row.some((value) => value !== ''));
+      if (desiredColumns?.length && !indexes.some((index) => index >= 0)) return null;
       return { rows, columns: columnsToCapture.filter((_, index) => indexes[index] >= 0), missingColumns };
     }, [currentRun?.reportId === '1847' || !currentRun ? DEALERSHIP_SOLD_COLUMNS : null]);
     const capture = results.find(({ result }) => result?.rows)?.result;
@@ -350,7 +357,7 @@ function capturesAsTsv(captures) {
     `From\t${capture.dateRange.start}`,
     `To\t${capture.dateRange.end}`,
     '',
-    ...capture.rows.map((row) => row.map((cell) => String(cell).replaceAll('\t', ' ').replaceAll('\n', ' ')).join('\t'))
+    ...capture.rows.filter((row) => row.some((cell) => String(cell).trim() !== '')).map((row) => row.map((cell) => String(cell).replaceAll('\t', ' ').replaceAll('\n', ' ')).join('\t'))
   ].join('\n')).join('\n\n');
 }
 
