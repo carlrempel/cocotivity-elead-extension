@@ -7,9 +7,17 @@ const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'u
 assert.equal(manifest.manifest_version, 3);
 assert.equal(manifest.version, '0.1.0');
 assert.equal(manifest.action.default_popup, 'src/popup.html');
+assert.ok(manifest.permissions.includes('activeTab'));
+assert.ok(manifest.permissions.includes('scripting'));
 assert.ok(fs.existsSync(path.join(root, 'src/background.js')));
 assert.ok(fs.existsSync(path.join(root, 'src/popup.html')));
 assert.ok(fs.existsSync(path.join(root, 'src/popup.css')));
 assert.ok(fs.existsSync(path.join(root, 'src/popup.js')));
+const popup = fs.readFileSync(path.join(root, 'src/popup.html'), 'utf8');
+const popupScript = fs.readFileSync(path.join(root, 'src/popup.js'), 'utf8');
+assert.match(popup, /launch-report-button/);
+assert.match(popupScript, /customreport\.aspx/);
+assert.match(popupScript, /1847/);
+assert.match(popup, /required From and To dates/);
 assert.ok(fs.existsSync(path.join(root, 'design/tokens.css')));
 console.log('Cocotivity eLead extension smoke test: passed');
