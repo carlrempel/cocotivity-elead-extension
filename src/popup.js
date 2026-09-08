@@ -14,6 +14,10 @@ const vehicleTypeInput = document.querySelector('#vehicle-type');
 const status = document.querySelector('#status');
 const queueElement = document.querySelector('#run-queue');
 const reportChecks = [...document.querySelectorAll('[data-report-name]')];
+const DEALERSHIP_SOLD_COLUMNS = [
+  'City', 'Date Active', 'Date Sold', 'Deal Status', 'DMS Deal ID', 'N/U',
+  'Salesperson', 'Source', 'State', 'Stock#', 'Up Type', 'Vehicle', 'VIN', 'Zip Code'
+];
 
 version.textContent = chrome.runtime.getManifest().version;
 
@@ -264,28 +268,35 @@ captureTableButton.addEventListener('click', async () => {
   try {
     const { reportDates, vehicleType, currentRun } = await chrome.storage.local.get(['reportDates', 'vehicleType', 'currentRun']);
     if (!reportDates?.start || !reportDates?.end) throw new Error('Run a report with dates before capturing.');
-    const results = await executeOnActiveTab(() => {
+    const results = await executeOnActiveTab((desiredColumns) => {
       const reportTable = document.querySelector('table#gvReport');
       if (!reportTable) return null;
-      return [...reportTable.querySelectorAll(':scope > tbody > tr, :scope > tr')]
-        .map((row) => [...row.children].filter((cell) => /^(TH|TD)$/.test(cell.tagName)).map((cell) => cell.innerText.trim()));
-    });
-    const rows = results.find(({ result }) => Array.isArray(result))?.result;
-    if (!rows) throw new Error('No result table was found on this page.');
+      const sourceRows = [...reportTable.querySelectorAll(':scope > tbody > tr, :scope > tr')];
+      const cellValues = (row) => [...row.children].filter((cell) => /^(TH|TD)$/.test(cell.tagName)).map((cell) => cell.innerText.trim());
+      const sourceHeaders = cellValues(sourceRows[0] || []);
+      const columnsToCapture = desiredColumns?.length ? desiredColumns : sourceHeaders;
+      const indexes = columnsToCapture.map((column) => sourceHeaders.findIndex((header) => header === column));
+      const missingColumns = desiredColumns?.length ? desiredColumns.filter((_, index) => indexes[index] === -1) : [];
+      const rows = sourceRows.map(cellValues).map((row) => indexes.filter((index) => index >= 0).map((index) => row[index] || ''));
+      return { rows, columns: columnsToCapture.filter((_, index) => indexes[index] >= 0), missingColumns };
+    }, [currentRun?.reportId === '1847' || !currentRun ? DEALERSHIP_SOLD_COLUMNS : null]);
+    const capture = results.find(({ result }) => result?.rows)?.result;
+    if (!capture) throw new Error('No report grid was found on this page.');
+    const { rows, columns, missingColumns } = capture;
     const reportName = currentRun?.reportName || 'Dealership Sold Details';
     const reportId = currentRun?.reportId || '1847';
     const criteriaValue = currentRun?.vehicleType || vehicleType || 'All';
     const key = `${reportId}|${reportName}|${criteriaValue}|${reportDates.start}|${reportDates.end}`;
     const saved = await chrome.storage.local.get('reportCaptures');
     const captures = saved.reportCaptures || {};
-    captures[key] = { key, reportName, criteria: { vehicleType: criteriaValue }, dateRange: reportDates, capturedAt: new Date().toISOString(), rows };
+    captures[key] = { key, reportName, criteria: { vehicleType: criteriaValue }, dateRange: reportDates, capturedAt: new Date().toISOString(), columns, missingColumns, rows };
     await chrome.storage.local.set({ reportCaptures: captures });
     if (currentRun) {
       const queue = await getQueue();
       await chrome.storage.local.set({ reportQueue: queue.map((run) => run.id === currentRun.id ? { ...run, status: 'complete' } : run), currentRun: null });
       await renderQueue();
     }
-    status.textContent = `Captured ${Math.max(0, rows.length - 1)} report rows from gvReport.`;
+    status.textContent = `Captured ${Math.max(0, rows.length - 1)} report rows from gvReport${missingColumns.length ? `; missing ${missingColumns.join(', ')}` : ''}.`;
   } catch (error) {
     status.textContent = error.message;
   } finally {
