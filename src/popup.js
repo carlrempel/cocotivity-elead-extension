@@ -3,6 +3,7 @@ const launchReportButton = document.querySelector('#launch-report-button');
 const runReportButton = document.querySelector('#run-report-button');
 const captureTableButton = document.querySelector('#capture-table-button');
 const copyCapturesButton = document.querySelector('#copy-captures-button');
+const copyDiagnosticButton = document.querySelector('#copy-diagnostic-button');
 const exportCapturesButton = document.querySelector('#export-captures-button');
 const startDateInput = document.querySelector('#start-date');
 const endDateInput = document.querySelector('#end-date');
@@ -159,6 +160,93 @@ copyCapturesButton.addEventListener('click', async () => {
     status.textContent = `Copied ${captures.length} capture(s) as spreadsheet-ready TSV.`;
   } catch (error) {
     status.textContent = `Could not copy captures: ${error.message}`;
+  }
+});
+
+copyDiagnosticButton.addEventListener('click', async () => {
+  copyDiagnosticButton.disabled = true;
+  status.textContent = 'Collecting sanitized diagnostic…';
+  const exceptions = [];
+  try {
+    const { reportDates, vehicleType, reportCaptures = {} } = await chrome.storage.local.get([
+      'reportDates', 'vehicleType', 'reportCaptures'
+    ]);
+    let frameChecks = [];
+    try {
+      const results = await executeOnActiveTab(() => ({
+        page: {
+          origin: window.location.origin,
+          path: window.location.pathname,
+          titlePresent: Boolean(document.title)
+        },
+        expected: {
+          reportsMenu: 'span[title="Reports"]',
+          reportsAllMenu: '#MenuSections_MenuSectionItems_11_MenuSectionLink_0[title="All"]',
+          dealershipSoldDetails: 'report ID 1847',
+          fromDate: 'input[name="start-date-input-simple"]',
+          toDate: 'input[name="end-date-input-simple"]',
+          vehicleType: 'select#szNewUsed',
+          runButton: '#btnRunReport',
+          resultTable: 'table'
+        },
+        actual: {
+          reportsMenu: Boolean(document.querySelector('span[title="Reports"]')),
+          reportsAllMenu: Boolean(document.querySelector('#MenuSections_MenuSectionItems_11_MenuSectionLink_0[title="All"]')),
+          dealershipSoldDetails: [...document.querySelectorAll('a')].some((link) => /customreport\.aspx/i.test(link.href) && /(?:^|[?&])id=1847(?:&|$)/i.test(link.href)),
+          fromDate: Boolean(document.querySelector('input[name="start-date-input-simple"]')),
+          toDate: Boolean(document.querySelector('input[name="end-date-input-simple"]')),
+          vehicleType: Boolean(document.querySelector('select#szNewUsed, select[name="szNewUsed"]')),
+          runButton: Boolean(document.querySelector('#btnRunReport')),
+          resultTable: document.querySelectorAll('table').length,
+          resultTableRows: Math.max(0, ...[...document.querySelectorAll('table')].map((table) => table.querySelectorAll('tr').length)),
+          resultTablePreview: (() => {
+            const table = [...document.querySelectorAll('table')].sort((a, b) => b.querySelectorAll('tr').length - a.querySelectorAll('tr').length)[0];
+            if (!table) return null;
+            const rows = [...table.querySelectorAll('tr')].slice(0, 4).map((row) => [...row.querySelectorAll('th,td')].map((cell) => cell.innerText.trim()));
+            const headers = rows[0] || [];
+            const safeField = (header) => /date|vehicle|stock|vin|source|type|status|sold|department|position|count|total|zip/i.test(header)
+              && !/name|email|phone|mobile|contact|address/i.test(header);
+            return {
+              columns: headers,
+              sampleRows: rows.slice(1).map((row) => row.map((value, index) => safeField(headers[index] || '') ? value : '[OMITTED]'))
+            };
+          })()
+        }
+      }));
+      frameChecks = results.map(({ result }) => result).filter(Boolean);
+    } catch (error) {
+      exceptions.push({ stage: 'inspect-active-tab', message: error.message });
+    }
+
+    const diagnostic = {
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      extension: { version: chrome.runtime.getManifest().version },
+      stage: 'report-launch-capture',
+      scope: {
+        reportName: 'Dealership Sold Details',
+        reportId: '1847',
+        criteria: { vehicleType: vehicleType || 'All' },
+        dateRange: reportDates || null
+      },
+      expectedVsActual: frameChecks,
+      storedCaptures: Object.values(reportCaptures).map((capture) => ({
+        key: capture.key,
+        reportName: capture.reportName,
+        criteria: capture.criteria,
+        dateRange: capture.dateRange,
+        capturedAt: capture.capturedAt,
+        rowCount: capture.rows?.length || 0
+      })),
+      outcome: frameChecks.some(({ actual }) => actual?.resultTableRows > 0) ? 'result table detected' : 'result table not detected',
+      exceptions
+    };
+    await navigator.clipboard.writeText(JSON.stringify(diagnostic, null, 2));
+    status.textContent = 'Diagnostic copied. Paste it here for evaluation.';
+  } catch (error) {
+    status.textContent = `Could not copy diagnostic: ${error.message}`;
+  } finally {
+    copyDiagnosticButton.disabled = false;
   }
 });
 
