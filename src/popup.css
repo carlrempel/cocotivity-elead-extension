@@ -1,0 +1,123 @@
+@import url('../design/tokens.css');
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 320px;
+  min-height: 320px;
+  margin: 0;
+  color: var(--cocotivity-ink);
+  background: var(--cocotivity-surface);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.panel {
+  display: flex;
+  min-height: 320px;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  gap: var(--cocotivity-space-3);
+  padding: 20px var(--cocotivity-space-4);
+  background: var(--cocotivity-ink);
+  color: var(--cocotivity-surface-strong);
+}
+
+.mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--cocotivity-accent);
+  color: var(--cocotivity-accent-strong);
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.eyebrow {
+  margin: 0 0 var(--cocotivity-space-1);
+  color: var(--cocotivity-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.header .eyebrow {
+  color: var(--cocotivity-accent);
+}
+
+h1,
+h2 {
+  margin: 0;
+  line-height: 1.15;
+}
+
+h1 {
+  font-size: 17px;
+}
+
+h2 {
+  margin-bottom: var(--cocotivity-space-2);
+  font-size: 24px;
+}
+
+.welcome {
+  flex: 1;
+  padding: 24px var(--cocotivity-space-4);
+}
+
+.intro {
+  margin: 0 0 24px;
+  color: var(--cocotivity-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+button {
+  width: 100%;
+  padding: 11px 16px;
+  border: 1px solid var(--cocotivity-accent);
+  border-radius: var(--cocotivity-radius);
+  background: var(--cocotivity-accent);
+  color: var(--cocotivity-accent-strong);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+button:hover {
+  filter: brightness(0.95);
+}
+
+button:focus-visible {
+  outline: 3px solid var(--cocotivity-warning-border);
+  outline-offset: 2px;
+}
+
+.status {
+  min-height: 20px;
+  margin: var(--cocotivity-space-3) 0 0;
+  color: var(--cocotivity-success);
+  font-size: 13px;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--cocotivity-space-3) var(--cocotivity-space-4);
+  border-top: 1px solid var(--cocotivity-border);
+  color: var(--cocotivity-muted);
+  font-size: 12px;
+}
+
+.footer strong {
+  color: var(--cocotivity-ink);
+  font-weight: 700;
+}

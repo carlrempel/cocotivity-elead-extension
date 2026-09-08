@@ -4,7 +4,8 @@
   "version": "0.1.0",
   "description": "Cocotivity eLead workflow extension.",
   "action": {
-    "default_title": "Cocotivity eLead"
+    "default_title": "Cocotivity eLead",
+    "default_popup": "src/popup.html"
   },
   "background": {
     "service_worker": "src/background.js"
