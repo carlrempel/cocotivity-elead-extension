@@ -1,0 +1,23 @@
+/* Cocotivity Chrome Extensions — semantic reference tokens, v0.1.0. */
+:root {
+  --cocotivity-accent: #a2e048;
+  --cocotivity-accent-strong: #211512;
+  --cocotivity-surface: #f9f6f0;
+  --cocotivity-surface-strong: #ffffff;
+  --cocotivity-ink: #211512;
+  --cocotivity-muted: #6f625d;
+  --cocotivity-success: #347044;
+  --cocotivity-warning: #8a5d1f;
+  --cocotivity-warning-surface: #fbf1df;
+  --cocotivity-warning-border: #d4a359;
+  --cocotivity-danger: #b42318;
+  --cocotivity-danger-surface: #fff1f0;
+  --cocotivity-danger-border: #e5a29c;
+  --cocotivity-border: #ded6cc;
+  --cocotivity-progress-track: #e8e1d8;
+  --cocotivity-radius: 8px;
+  --cocotivity-space-1: 4px;
+  --cocotivity-space-2: 8px;
+  --cocotivity-space-3: 12px;
+  --cocotivity-space-4: 16px;
+}

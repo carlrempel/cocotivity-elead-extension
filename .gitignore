@@ -1,0 +1,10 @@
+.DS_Store
+*.log
+node_modules/
+dist/
+coverage/
+
+# Fixtures may contain PII or other restricted data. Keep only the directory
+# guidance tracked; never commit fixture data.
+/fixtures/*
+!/fixtures/README.md
