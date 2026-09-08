@@ -148,6 +148,22 @@ const runReportInPage = async (reportId, reportName, from, to, selectedVehicleTy
   typeDigits(fields[1], to);
   fields[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab', bubbles: true }));
   fields[1].blur();
+  const parseDate = (value) => {
+    const [month, day, year] = value.split('/').map(Number);
+    return { month, day, year };
+  };
+  const setHiddenDate = (selector, value) => {
+    const field = criteriaDocument.querySelector(selector);
+    if (!field) return false;
+    field.value = value;
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  };
+  const start = parseDate(from);
+  const end = parseDate(to);
+  setHiddenDate('#datePickerStartDate', `${start.month}/${start.day}/${start.year} 12:00:00 AM`);
+  setHiddenDate('#datePickerEndDate', `${end.month}/${end.day}/${end.year} 11:59:59 PM`);
   const vehicle = criteriaDocument.querySelector('select#szNewUsed, select[name="szNewUsed"]');
   if (vehicle && reportId === '1847') {
     vehicle.value = selectedVehicleType;
