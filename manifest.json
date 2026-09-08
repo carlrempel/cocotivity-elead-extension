@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Cocotivity eLead Extension",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "Cocotivity eLead workflow extension.",
   "action": {
     "default_title": "Cocotivity eLead",

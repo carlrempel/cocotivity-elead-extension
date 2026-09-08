@@ -35,7 +35,7 @@ chrome.storage.local.get('vehicleType').then(({ vehicleType }) => {
   vehicleTypeInput.value = vehicleType ?? '';
 });
 
-const queueLabel = (run) => `${run.reportName} — ${run.vehicleType || 'default'} — ${run.dateRange.start}–${run.dateRange.end}`;
+const queueLabel = (run) => `${run.reportName} — ${run.vehicleType || 'All'} — ${run.dateRange.start}–${run.dateRange.end}`;
 
 async function getQueue() {
   const { reportQueue = [] } = await chrome.storage.local.get('reportQueue');
@@ -165,7 +165,7 @@ const runReportInPage = async (reportId, reportName, from, to, selectedVehicleTy
   setHiddenDate('#datePickerStartDate', `${start.month}/${start.day}/${start.year} 12:00:00 AM`);
   setHiddenDate('#datePickerEndDate', `${end.month}/${end.day}/${end.year} 11:59:59 PM`);
   const vehicle = criteriaDocument.querySelector('select#szNewUsed, select[name="szNewUsed"]');
-  if (vehicle && reportId === '1847') {
+  if (vehicle) {
     vehicle.value = selectedVehicleType;
     vehicle.dispatchEvent(new Event('change', { bubbles: true }));
   }
@@ -186,7 +186,7 @@ addToQueueButton.addEventListener('click', async () => {
       id: crypto.randomUUID(),
       reportId: check.value,
       reportName: check.dataset.reportName,
-      vehicleType: check.value === '1847' ? (vehicleType || 'All') : 'default',
+      vehicleType: vehicleType || 'All',
       dateRange: { start, end },
       status: 'queued'
     }));
@@ -272,7 +272,7 @@ runReportButton.addEventListener('click', async () => {
         id: crypto.randomUUID(),
         reportId: check.value,
         reportName: check.dataset.reportName,
-        vehicleType: check.value === '1847' ? (vehicleType || 'All') : 'default',
+      vehicleType: vehicleType || 'All',
         dateRange: { start: from, end: to },
         status: 'running'
       };
