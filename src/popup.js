@@ -18,6 +18,7 @@ const DEALERSHIP_SOLD_COLUMNS = [
   'City', 'Date Active', 'Date Sold', 'Deal Status', 'DMS Deal ID', 'N/U',
   'Salesperson', 'Source', 'State', 'Stock#', 'Up Type', 'Vehicle', 'VIN', 'Zip Code'
 ];
+const PROSPECTS_ZIP_COLUMNS = ['Zip', 'City & State', 'Prospects', 'Shown', 'Sold', 'Shown %', 'Closing %'];
 
 version.textContent = chrome.runtime.getManifest().version;
 
@@ -307,14 +308,24 @@ captureTableButton.addEventListener('click', async () => {
   try {
     const { reportDates, vehicleType, currentRun } = await chrome.storage.local.get(['reportDates', 'vehicleType', 'currentRun']);
     if (!reportDates?.start || !reportDates?.end) throw new Error('Run a report with dates before capturing.');
-    const results = await executeOnActiveTab((desiredColumns) => {
-      const reportTable = document.querySelector('table#gvReport');
+    const reportName = currentRun?.reportName || 'Dealership Sold Details';
+    const reportId = currentRun?.reportId || (reportName === 'Prospects by ZIP Code' ? 'prospects-zip' : '1847');
+    const requestedColumns = currentRun && reportId === '1847' ? DEALERSHIP_SOLD_COLUMNS : null;
+    const requestedSignature = currentRun && reportId === 'prospects-zip' ? PROSPECTS_ZIP_COLUMNS : null;
+    const results = await executeOnActiveTab((desiredColumns, signature) => {
+      const cellValues = (row) => [...row.children].filter((cell) => /^(TH|TD)$/.test(cell.tagName)).map((cell) => cell.innerText.trim());
+      const reportTable = [...document.querySelectorAll('table')].find((table) => {
+        const values = [...table.querySelectorAll(':scope > tbody > tr, :scope > tr')].flatMap(cellValues);
+        if (desiredColumns?.length) return table.matches('table#gvReport') && desiredColumns.some((column) => values.includes(column));
+        if (signature?.length) return signature.filter((column) => values.includes(column)).length >= Math.min(4, signature.length);
+        return PROSPECTS_ZIP_COLUMNS.filter((column) => values.includes(column)).length >= 4
+          || values.includes('Date Active') && values.includes('Deal Status');
+      });
       if (!reportTable) return null;
       const sourceRows = [...reportTable.querySelectorAll(':scope > tbody > tr, :scope > tr')];
-      const cellValues = (row) => [...row.children].filter((cell) => /^(TH|TD)$/.test(cell.tagName)).map((cell) => cell.innerText.trim());
       const headerIndex = sourceRows.findIndex((row) => {
         const values = cellValues(row);
-        return values.length > 0 && values.some((value) => desiredColumns?.includes(value));
+        return values.length > 0 && (desiredColumns?.some((column) => values.includes(column)) || signature?.some((column) => values.includes(column)));
       });
       const sourceHeaders = cellValues(sourceRows[headerIndex >= 0 ? headerIndex : 0] || []);
       const columnsToCapture = desiredColumns?.length ? desiredColumns : sourceHeaders;
@@ -323,19 +334,26 @@ captureTableButton.addEventListener('click', async () => {
       const rows = sourceRows.slice(Math.max(0, headerIndex)).map(cellValues)
         .map((row) => indexes.filter((index) => index >= 0).map((index) => row[index] || ''))
         .filter((row) => row.some((value) => value !== ''));
-      if (desiredColumns?.length && !indexes.some((index) => index >= 0)) return null;
-      return { rows, columns: columnsToCapture.filter((_, index) => indexes[index] >= 0), missingColumns };
-    }, [currentRun?.reportId === '1847' || !currentRun ? DEALERSHIP_SOLD_COLUMNS : null]);
+      if ((desiredColumns?.length || signature?.length) && !indexes.some((index) => index >= 0)) return null;
+      const heading = document.querySelector('#lblHeaderReportName, #lblReportName')?.innerText.trim() || '';
+      return {
+        rows,
+        columns: columnsToCapture.filter((_, index) => indexes[index] >= 0),
+        missingColumns,
+        detectedReportName: heading,
+        detectedReportId: heading.toLowerCase().includes('prospects by zip') ? 'prospects-zip' : heading.toLowerCase().includes('dealership sold') ? '1847' : ''
+      };
+    }, [requestedColumns, requestedSignature]);
     const capture = results.find(({ result }) => result?.rows)?.result;
-    if (!capture) throw new Error('No report grid was found on this page.');
+    if (!capture) throw new Error('No matching result table was found. Select the report you just ran, then capture it.');
     const { rows, columns, missingColumns } = capture;
-    const reportName = currentRun?.reportName || 'Dealership Sold Details';
-    const reportId = currentRun?.reportId || '1847';
+    const capturedReportName = capture.detectedReportName || reportName;
+    const capturedReportId = capture.detectedReportId || reportId;
     const criteriaValue = currentRun?.vehicleType || vehicleType || 'All';
-    const key = `${reportId}|${reportName}|${criteriaValue}|${reportDates.start}|${reportDates.end}`;
+    const key = `${capturedReportId}|${capturedReportName}|${criteriaValue}|${reportDates.start}|${reportDates.end}`;
     const saved = await chrome.storage.local.get('reportCaptures');
     const captures = saved.reportCaptures || {};
-    captures[key] = { key, reportName, criteria: { vehicleType: criteriaValue }, dateRange: reportDates, capturedAt: new Date().toISOString(), columns, missingColumns, rows };
+    captures[key] = { key, reportName: capturedReportName, reportId: capturedReportId, criteria: { vehicleType: criteriaValue }, dateRange: reportDates, capturedAt: new Date().toISOString(), columns, missingColumns, rows };
     await chrome.storage.local.set({ reportCaptures: captures });
     if (currentRun) {
       const queue = await getQueue();
