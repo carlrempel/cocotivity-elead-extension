@@ -164,9 +164,18 @@ const runReportInPage = async (reportId, reportName, from, to, selectedVehicleTy
   const end = parseDate(to);
   setHiddenDate('#datePickerStartDate', `${start.month}/${start.day}/${start.year} 12:00:00 AM`);
   setHiddenDate('#datePickerEndDate', `${end.month}/${end.day}/${end.year} 11:59:59 PM`);
-  const vehicle = criteriaDocument.querySelector('select#szNewUsed, select[name="szNewUsed"]');
+  const vehicle = criteriaDocument.querySelector('select#szNewUsed, select[name="szNewUsed"]')
+    || [...criteriaDocument.querySelectorAll('select')].find((select) => {
+      const label = `${select.getAttribute('parameterlabel') || ''} ${select.closest('tr')?.innerText || ''}`.toLowerCase();
+      return label.includes('new / used') || label.includes('vehicle type');
+    });
   if (vehicle) {
-    vehicle.value = selectedVehicleType;
+    const desiredText = selectedVehicleType ? 'new' : 'all';
+    const option = [...vehicle.options].find((candidate) => {
+      const text = candidate.textContent.trim().toLowerCase();
+      return selectedVehicleType ? text === desiredText || candidate.value === selectedVehicleType : text.includes(desiredText) || candidate.value === '';
+    });
+    vehicle.value = option?.value ?? selectedVehicleType;
     vehicle.dispatchEvent(new Event('change', { bubbles: true }));
   }
   const submit = criteriaDocument.querySelector('#btnRunReport');
@@ -362,8 +371,8 @@ copyDiagnosticButton.addEventListener('click', async () => {
   status.textContent = 'Collecting sanitized diagnostic…';
   const exceptions = [];
   try {
-    const { reportDates, vehicleType, reportCaptures = {} } = await chrome.storage.local.get([
-      'reportDates', 'vehicleType', 'reportCaptures'
+    const { reportDates, vehicleType, currentRun, reportCaptures = {} } = await chrome.storage.local.get([
+      'reportDates', 'vehicleType', 'currentRun', 'reportCaptures'
     ]);
     let frameChecks = [];
     try {
@@ -379,7 +388,7 @@ copyDiagnosticButton.addEventListener('click', async () => {
           dealershipSoldDetails: 'report ID 1847',
           fromDate: 'input[name="start-date-input-simple"]',
           toDate: 'input[name="end-date-input-simple"]',
-          vehicleType: 'select#szNewUsed',
+          vehicleType: 'select#szNewUsed or a select labeled New / Used',
           runButton: '#btnRunReport',
           resultTable: 'table#gvReport'
         },
@@ -389,7 +398,7 @@ copyDiagnosticButton.addEventListener('click', async () => {
           dealershipSoldDetails: [...document.querySelectorAll('a')].some((link) => /customreport\.aspx/i.test(link.href) && /(?:^|[?&])id=1847(?:&|$)/i.test(link.href)),
           fromDate: Boolean(document.querySelector('input[name="start-date-input-simple"]')),
           toDate: Boolean(document.querySelector('input[name="end-date-input-simple"]')),
-          vehicleType: Boolean(document.querySelector('select#szNewUsed, select[name="szNewUsed"]')),
+          vehicleType: Boolean(document.querySelector('select#szNewUsed, select[name="szNewUsed"]') || [...document.querySelectorAll('select')].find((select) => `${select.getAttribute('parameterlabel') || ''} ${select.closest('tr')?.innerText || ''}`.toLowerCase().match(/new \/ used|vehicle type/))),
           runButton: Boolean(document.querySelector('#btnRunReport')),
           resultTable: Boolean(document.querySelector('table#gvReport')),
           resultTableRows: document.querySelector('table#gvReport')?.querySelectorAll(':scope > tbody > tr, :scope > tr').length || 0,
