@@ -2,6 +2,7 @@ const version = document.querySelector('#version');
 const launchReportButton = document.querySelector('#launch-report-button');
 const runReportButton = document.querySelector('#run-report-button');
 const addToQueueButton = document.querySelector('#add-to-queue-button');
+const clearQueueButton = document.querySelector('#clear-queue-button');
 const runNextButton = document.querySelector('#run-next-button');
 const captureTableButton = document.querySelector('#capture-table-button');
 const copyCapturesButton = document.querySelector('#copy-captures-button');
@@ -53,6 +54,18 @@ async function renderQueue() {
 }
 
 renderQueue();
+
+clearQueueButton.addEventListener('click', async () => {
+  const queue = await getQueue();
+  if (!queue.length) {
+    status.textContent = 'The run queue is already empty.';
+    return;
+  }
+  if (!window.confirm(`Clear ${queue.length} queued run(s)? Captured results will be kept.`)) return;
+  await chrome.storage.local.remove(['reportQueue', 'currentRun']);
+  await renderQueue();
+  status.textContent = 'Run queue cleared. Captured results were kept.';
+});
 
 function readDates() {
   const dates = [startDateInput.value.trim(), endDateInput.value.trim()];
