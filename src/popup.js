@@ -51,6 +51,10 @@ launchReportButton.addEventListener('click', async () => {
       if (!link) {
         document.querySelector('span#MenuSections_SectionLabel_11[title="Reports"], span[title="Reports"]')?.click();
         await new Promise((resolve) => setTimeout(resolve, 200));
+        document.querySelector(
+          '#MenuSections_MenuSectionItems_11_MenuSectionLink_0[title="All"], a[title="All"]'
+        )?.click();
+        await new Promise((resolve) => setTimeout(resolve, 300));
         link = findReportLink();
       }
       if (!link) return false;
