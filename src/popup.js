@@ -60,11 +60,87 @@ function readDates() {
   return dates;
 }
 
-async function executeOnActiveTab(func, args = []) {
+async function executeOnActiveTab(func, args = [], allFrames = true) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) throw new Error('No active tab was found.');
-  return chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, func, args });
+  return chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames }, func, args });
 }
+
+const runReportInPage = async (reportId, reportName, from, to, selectedVehicleType) => {
+  const getDocuments = (root, path = 'top') => {
+    const documents = [{ document: root, path }];
+    for (const [index, frame] of [...root.querySelectorAll('iframe')].entries()) {
+      try {
+        if (frame.contentDocument) documents.push(...getDocuments(frame.contentDocument, `${path}.iframe${index}`));
+      } catch (_) {
+        // Cross-origin frames are intentionally skipped.
+      }
+    }
+    return documents;
+  };
+  const find = (predicate) => getDocuments(document).map(({ document: doc, path }) => ({ element: predicate(doc), path })).find(({ element }) => element);
+  const waitFor = async (predicate, timeout = 10000) => {
+    const started = Date.now();
+    while (Date.now() - started < timeout) {
+      const found = find(predicate);
+      if (found) return found;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    return null;
+  };
+  const reportLink = (doc) => [...doc.querySelectorAll('a')].find((candidate) => {
+    const url = new URL(candidate.href, window.location.href);
+    const id = [...url.searchParams.entries()].find(([key]) => key.toLowerCase() === 'id')?.[1];
+    return url.pathname.toLowerCase().endsWith('/reports/customreport.aspx') && id === reportId;
+  }) || [...doc.querySelectorAll('span[data-i18n^="reportMenu:"]')]
+    .find((span) => span.dataset.i18n.slice('reportMenu:'.length).toLowerCase() === reportName.toLowerCase())?.closest('a');
+
+  let link = find(reportLink);
+  if (!link) {
+    find((doc) => doc.querySelector('span#MenuSections_SectionLabel_11[title="Reports"], span[title="Reports"]'))?.element?.click();
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    find((doc) => doc.querySelector('#MenuSections_MenuSectionItems_11_MenuSectionLink_0[title="All"], a[title="All"]'))?.element?.click();
+    link = await waitFor(reportLink, 12000);
+  }
+  if (!link) return { stage: 'report-link', error: 'Report link was not found.' };
+  link.element.click();
+
+  const criteria = await waitFor((doc) => doc.querySelector('input[name="start-date-input-simple"]'), 15000);
+  if (!criteria) return { stage: 'criteria', error: 'Criteria fields did not appear in the report iframe.' };
+  const criteriaDocument = criteria.element.ownerDocument;
+  const fields = [
+    criteriaDocument.querySelector('input[name="start-date-input-simple"]'),
+    criteriaDocument.querySelector('input[name="end-date-input-simple"]')
+  ];
+  const typeDigits = (field, date) => {
+    field.focus();
+    field.select();
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', bubbles: true }));
+    field.ownerDocument.execCommand('delete');
+    for (const digit of date.replaceAll('/', '')) {
+      if (!field.ownerDocument.execCommand('insertText', false, digit)) {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+        setter.call(field, `${field.value}${digit}`);
+        field.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: digit }));
+      }
+    }
+    field.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  typeDigits(fields[0], from);
+  fields[1].focus();
+  typeDigits(fields[1], to);
+  fields[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab', bubbles: true }));
+  fields[1].blur();
+  const vehicle = criteriaDocument.querySelector('select#szNewUsed, select[name="szNewUsed"]');
+  if (vehicle && reportId === '1847') {
+    vehicle.value = selectedVehicleType;
+    vehicle.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  const submit = criteriaDocument.querySelector('#btnRunReport');
+  if (!submit) return { stage: 'criteria', error: 'GO button was not found in the report iframe.' };
+  submit.click();
+  return { stage: 'submitted', framePath: criteria.path };
+};
 
 addToQueueButton.addEventListener('click', async () => {
   try {
@@ -154,37 +230,14 @@ runReportButton.addEventListener('click', async () => {
     const [from, to] = readDates();
     const vehicleType = vehicleTypeInput.value;
     await chrome.storage.local.set({ reportDates: { start: from, end: to }, vehicleType });
-    const results = await executeOnActiveTab((start, end, selectedType) => {
-      const fields = [document.querySelector('input[name="start-date-input-simple"]'), document.querySelector('input[name="end-date-input-simple"]')];
-      if (fields.some((field) => !field)) return false;
-      const typeDigits = (field, date) => {
-        field.focus();
-        field.select();
-        field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', code: 'Backspace', bubbles: true }));
-        document.execCommand('delete');
-        for (const digit of date.replaceAll('/', '')) {
-          if (!document.execCommand('insertText', false, digit)) {
-            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
-            setter.call(field, `${field.value}${digit}`);
-            field.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: digit }));
-          }
-        }
-        field.dispatchEvent(new Event('change', { bubbles: true }));
-      };
-      typeDigits(fields[0], start);
-      fields[1].focus();
-      typeDigits(fields[1], end);
-      fields[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', code: 'Tab', bubbles: true }));
-      fields[1].blur();
-      const vehicle = document.querySelector('select#szNewUsed, select[name="szNewUsed"]');
-      if (vehicle) {
-        vehicle.value = selectedType;
-        vehicle.dispatchEvent(new Event('change', { bubbles: true }));
-      }
-      document.querySelector('#btnRunReport')?.click();
-      return true;
-    }, [from, to, vehicleType]);
-    status.textContent = results.some(({ result }) => result) ? 'Report started. Reopen this panel on the results page to capture it.' : 'Required criteria fields were not found on this page.';
+    const { currentRun } = await chrome.storage.local.get('currentRun');
+    const reportId = currentRun?.reportId || '1847';
+    const reportName = currentRun?.reportName || 'Dealership Sold Details';
+    const results = await executeOnActiveTab(runReportInPage, [reportId, reportName, from, to, vehicleType], false);
+    const result = results.find(({ result: value }) => value)?.result;
+    status.textContent = result?.stage === 'submitted'
+      ? 'Report submitted. Reopen this panel on the results page to capture it.'
+      : (result?.error || 'The report runner could not complete.');
   } catch (error) {
     status.textContent = error.message;
   } finally {
