@@ -384,8 +384,9 @@ copyCapturesButton.addEventListener('click', async () => {
     const { reportCaptures = {} } = await chrome.storage.local.get('reportCaptures');
     const captures = Object.values(reportCaptures);
     if (!captures.length) throw new Error('No captures are available to copy.');
-    await navigator.clipboard.writeText(capturesAsTsv(captures));
-    status.textContent = `Copied ${captures.length} capture(s) as spreadsheet-ready TSV.`;
+    const latest = captures.reduce((newest, capture) => !newest || capture.capturedAt > newest.capturedAt ? capture : newest, null);
+    await navigator.clipboard.writeText(capturesAsTsv([latest]));
+    status.textContent = `Copied latest capture: ${latest.reportName} (${latest.dateRange.start}–${latest.dateRange.end}).`;
   } catch (error) {
     status.textContent = `Could not copy captures: ${error.message}`;
   }
