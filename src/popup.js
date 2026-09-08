@@ -265,8 +265,10 @@ captureTableButton.addEventListener('click', async () => {
     const { reportDates, vehicleType, currentRun } = await chrome.storage.local.get(['reportDates', 'vehicleType', 'currentRun']);
     if (!reportDates?.start || !reportDates?.end) throw new Error('Run a report with dates before capturing.');
     const results = await executeOnActiveTab(() => {
-      const tables = [...document.querySelectorAll('table')].map((table) => [...table.querySelectorAll('tr')]).filter((rows) => rows.length).sort((a, b) => b.length - a.length);
-      return tables[0]?.map((row) => [...row.querySelectorAll('th,td')].map((cell) => cell.innerText.trim())) || null;
+      const reportTable = document.querySelector('table#gvReport');
+      if (!reportTable) return null;
+      return [...reportTable.querySelectorAll(':scope > tbody > tr, :scope > tr')]
+        .map((row) => [...row.children].filter((cell) => /^(TH|TD)$/.test(cell.tagName)).map((cell) => cell.innerText.trim()));
     });
     const rows = results.find(({ result }) => Array.isArray(result))?.result;
     if (!rows) throw new Error('No result table was found on this page.');
@@ -283,7 +285,7 @@ captureTableButton.addEventListener('click', async () => {
       await chrome.storage.local.set({ reportQueue: queue.map((run) => run.id === currentRun.id ? { ...run, status: 'complete' } : run), currentRun: null });
       await renderQueue();
     }
-    status.textContent = `Captured ${rows.length} rows.`;
+    status.textContent = `Captured ${Math.max(0, rows.length - 1)} report rows from gvReport.`;
   } catch (error) {
     status.textContent = error.message;
   } finally {
@@ -338,7 +340,7 @@ copyDiagnosticButton.addEventListener('click', async () => {
           toDate: 'input[name="end-date-input-simple"]',
           vehicleType: 'select#szNewUsed',
           runButton: '#btnRunReport',
-          resultTable: 'table'
+          resultTable: 'table#gvReport'
         },
         actual: {
           reportsMenu: Boolean(document.querySelector('span[title="Reports"]')),
@@ -348,8 +350,8 @@ copyDiagnosticButton.addEventListener('click', async () => {
           toDate: Boolean(document.querySelector('input[name="end-date-input-simple"]')),
           vehicleType: Boolean(document.querySelector('select#szNewUsed, select[name="szNewUsed"]')),
           runButton: Boolean(document.querySelector('#btnRunReport')),
-          resultTable: document.querySelectorAll('table').length,
-          resultTableRows: Math.max(0, ...[...document.querySelectorAll('table')].map((table) => table.querySelectorAll('tr').length)),
+          resultTable: Boolean(document.querySelector('table#gvReport')),
+          resultTableRows: document.querySelector('table#gvReport')?.querySelectorAll('tr').length || 0,
           resultTablePreview: (() => {
             const table = [...document.querySelectorAll('table')].sort((a, b) => b.querySelectorAll('tr').length - a.querySelectorAll('tr').length)[0];
             if (!table) return null;
