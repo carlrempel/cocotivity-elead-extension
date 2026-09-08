@@ -213,8 +213,8 @@ runNextButton.addEventListener('click', async () => {
       status.textContent = 'Running the next queued report…';
       runReportButton.click();
     } else {
-      status.textContent = `${next.reportName} opened. Configure its report-specific criteria, then run it.`;
-      launchReportButton.click();
+      status.textContent = `Running ${next.reportName}…`;
+      runReportButton.click();
     }
   } catch (error) {
     status.textContent = error.message;
@@ -263,9 +263,23 @@ runReportButton.addEventListener('click', async () => {
     const [from, to] = readDates();
     const vehicleType = vehicleTypeInput.value;
     await chrome.storage.local.set({ reportDates: { start: from, end: to }, vehicleType });
-    const { currentRun } = await chrome.storage.local.get('currentRun');
-    const reportId = currentRun?.reportId || '1847';
-    const reportName = currentRun?.reportName || 'Dealership Sold Details';
+    let { currentRun } = await chrome.storage.local.get('currentRun');
+    if (!currentRun) {
+      const selected = reportChecks.filter((check) => check.checked);
+      if (selected.length !== 1) throw new Error('Select exactly one report, or add multiple reports to the queue first.');
+      const check = selected[0];
+      currentRun = {
+        id: crypto.randomUUID(),
+        reportId: check.value,
+        reportName: check.dataset.reportName,
+        vehicleType: check.value === '1847' ? (vehicleType || 'All') : 'default',
+        dateRange: { start: from, end: to },
+        status: 'running'
+      };
+      await chrome.storage.local.set({ currentRun });
+    }
+    const reportId = currentRun.reportId;
+    const reportName = currentRun.reportName;
     const results = await executeOnActiveTab(runReportInPage, [reportId, reportName, from, to, vehicleType], false);
     const result = results.find(({ result: value }) => value)?.result;
     status.textContent = result?.stage === 'submitted'
@@ -378,14 +392,14 @@ copyDiagnosticButton.addEventListener('click', async () => {
           vehicleType: Boolean(document.querySelector('select#szNewUsed, select[name="szNewUsed"]')),
           runButton: Boolean(document.querySelector('#btnRunReport')),
           resultTable: Boolean(document.querySelector('table#gvReport')),
-          resultTableRows: document.querySelector('table#gvReport')?.querySelectorAll('tr').length || 0,
+          resultTableRows: document.querySelector('table#gvReport')?.querySelectorAll(':scope > tbody > tr, :scope > tr').length || 0,
           resultTablePreview: (() => {
-            const table = [...document.querySelectorAll('table')].sort((a, b) => b.querySelectorAll('tr').length - a.querySelectorAll('tr').length)[0];
+            const table = document.querySelector('table#gvReport');
             if (!table) return null;
-            const rows = [...table.querySelectorAll('tr')].slice(0, 4).map((row) => [...row.querySelectorAll('th,td')].map((cell) => cell.innerText.trim()));
+            const rows = [...table.querySelectorAll(':scope > tbody > tr, :scope > tr')].slice(0, 4).map((row) => [...row.children].filter((cell) => /^(TH|TD)$/.test(cell.tagName)).map((cell) => cell.innerText.trim()));
             const headers = rows[0] || [];
-            const safeField = (header) => /date|vehicle|stock|vin|source|type|status|sold|department|position|count|total|zip/i.test(header)
-              && !/name|email|phone|mobile|contact|address/i.test(header);
+            const safeFields = new Set(['city', 'date active', 'date sold', 'deal status', 'dms deal id', 'n/u', 'source', 'state', 'stock#', 'up type', 'vehicle', 'vin', 'zip code', 'front', 'back', 'total', 'sale price', 'p/l', 'inventory acquired date']);
+            const safeField = (header) => safeFields.has(header.toLowerCase());
             return {
               columns: headers,
               sampleRows: rows.slice(1).map((row) => row.map((value, index) => safeField(headers[index] || '') ? value : '[OMITTED]'))
@@ -404,9 +418,9 @@ copyDiagnosticButton.addEventListener('click', async () => {
       extension: { version: chrome.runtime.getManifest().version },
       stage: 'report-launch-capture',
       scope: {
-        reportName: 'Dealership Sold Details',
-        reportId: '1847',
-        criteria: { vehicleType: vehicleType || 'All' },
+        reportName: currentRun?.reportName || 'No active report',
+        reportId: currentRun?.reportId || null,
+        criteria: { vehicleType: currentRun?.vehicleType || vehicleType || 'All' },
         dateRange: reportDates || null
       },
       expectedVsActual: frameChecks,
