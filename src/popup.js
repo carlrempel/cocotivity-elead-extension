@@ -11,10 +11,18 @@ const status = document.querySelector('#status');
 
 version.textContent = chrome.runtime.getManifest().version;
 
-chrome.storage.local.get(['reportDates', 'vehicleType']).then((saved) => {
-  startDateInput.value = saved.reportDates?.start || '';
-  endDateInput.value = saved.reportDates?.end || '';
-  vehicleTypeInput.value = saved.vehicleType ?? '';
+const formatDate = (date) => [
+  String(date.getMonth() + 1).padStart(2, '0'),
+  String(date.getDate()).padStart(2, '0'),
+  date.getFullYear()
+].join('/');
+
+const today = new Date();
+startDateInput.value = formatDate(new Date(today.getFullYear(), today.getMonth(), 1));
+endDateInput.value = formatDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1));
+
+chrome.storage.local.get('vehicleType').then(({ vehicleType }) => {
+  vehicleTypeInput.value = vehicleType ?? '';
 });
 
 function readDates() {
