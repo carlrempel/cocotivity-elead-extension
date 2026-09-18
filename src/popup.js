@@ -21,7 +21,7 @@ const DEALERSHIP_SOLD_COLUMNS = [
 ];
 const PROSPECTS_ZIP_COLUMNS = ['Zip', 'City & State', 'Prospects', 'Shown', 'Sold', 'Shown %', 'Closing %'];
 
-version.textContent = chrome.runtime.getManifest().version;
+version.textContent = `v${chrome.runtime.getManifest().version}`;
 
 const formatDate = (date) => [
   String(date.getMonth() + 1).padStart(2, '0'),

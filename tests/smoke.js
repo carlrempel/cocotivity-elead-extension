@@ -5,7 +5,7 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
 assert.equal(manifest.manifest_version, 3);
-assert.equal(manifest.version, '0.1.22');
+assert.equal(manifest.version, '0.1.23');
 assert.equal(manifest.action.default_popup, 'src/popup.html');
 assert.ok(manifest.permissions.includes('activeTab'));
 assert.ok(manifest.permissions.includes('scripting'));

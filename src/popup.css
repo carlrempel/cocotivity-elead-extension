@@ -28,6 +28,21 @@ body {
   color: var(--cocotivity-surface-strong);
 }
 
+.header-title {
+  min-width: 0;
+}
+
+.header-version {
+  margin-left: auto;
+  padding: 4px 7px;
+  border: 1px solid var(--cocotivity-accent);
+  border-radius: 999px;
+  color: var(--cocotivity-accent);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .mark {
   display: grid;
   width: 36px;
@@ -213,18 +228,4 @@ button:focus-visible {
   margin: var(--cocotivity-space-3) 0 0;
   color: var(--cocotivity-success);
   font-size: 13px;
-}
-
-.footer {
-  display: flex;
-  justify-content: space-between;
-  padding: var(--cocotivity-space-3) var(--cocotivity-space-4);
-  border-top: 1px solid var(--cocotivity-border);
-  color: var(--cocotivity-muted);
-  font-size: 12px;
-}
-
-.footer strong {
-  color: var(--cocotivity-ink);
-  font-weight: 700;
 }
