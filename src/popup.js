@@ -169,9 +169,11 @@ const runReportInPage = async (reportId, reportName, from, to, selectedVehicleTy
     || [...criteriaDocument.querySelectorAll('select')].find((select) => {
       const label = `${select.getAttribute('parameterlabel') || ''} ${select.closest('tr')?.innerText || ''}`.toLowerCase();
       return label.includes('new / used') || label.includes('vehicle type');
-    });
+  });
   if (vehicle) {
-    const desiredText = selectedVehicleType ? 'new' : 'all';
+    const desiredText = selectedVehicleType === 'N' ? 'new'
+      : selectedVehicleType === 'U' ? 'used'
+        : 'all';
     const option = [...vehicle.options].find((candidate) => {
       const text = candidate.textContent.trim().toLowerCase();
       return selectedVehicleType ? text === desiredText || candidate.value === selectedVehicleType : text.includes(desiredText) || candidate.value === '';
