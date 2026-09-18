@@ -4,6 +4,7 @@ const runReportButton = document.querySelector('#run-report-button');
 const addToQueueButton = document.querySelector('#add-to-queue-button');
 const clearQueueButton = document.querySelector('#clear-queue-button');
 const runNextButton = document.querySelector('#run-next-button');
+const runQueueButton = document.querySelector('#run-queue-button');
 const captureTableButton = document.querySelector('#capture-table-button');
 const copyCapturesButton = document.querySelector('#copy-captures-button');
 const copyDiagnosticButton = document.querySelector('#copy-diagnostic-button');
@@ -82,6 +83,29 @@ async function executeOnActiveTab(func, args = [], allFrames = true) {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) throw new Error('No active tab was found.');
   return chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames }, func, args });
+}
+
+async function waitForReportResults(timeout = 60000) {
+  const results = await executeOnActiveTab(async (waitTimeout) => {
+    const getDocuments = (root) => {
+      const documents = [root];
+      for (const frame of root.querySelectorAll('iframe')) {
+        try {
+          if (frame.contentDocument) documents.push(...getDocuments(frame.contentDocument));
+        } catch (_) {
+          // Cross-origin frames are intentionally skipped.
+        }
+      }
+      return documents;
+    };
+    const started = Date.now();
+    while (Date.now() - started < waitTimeout) {
+      if (getDocuments(document).some((doc) => doc.querySelector('table#gvReport'))) return true;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    return false;
+  }, [timeout], false);
+  return results.some(({ result }) => result);
 }
 
 const runReportInPage = async (reportId, reportName, from, to, selectedVehicleType) => {
@@ -233,6 +257,56 @@ runNextButton.addEventListener('click', async () => {
   }
 });
 
+runQueueButton.addEventListener('click', async () => {
+  runQueueButton.disabled = true;
+  runNextButton.disabled = true;
+  let activeRun = null;
+  try {
+    const runs = (await getQueue()).filter((run) => run.status === 'queued');
+    if (!runs.length) throw new Error('The run queue is empty. Add reports before running the queue.');
+    const batchCaptures = [];
+    for (const [index, run] of runs.entries()) {
+      activeRun = run;
+      const selectedVehicleType = run.vehicleType === 'All' ? '' : run.vehicleType;
+      status.textContent = `Running ${index + 1} of ${runs.length}: ${run.reportName}…`;
+      await chrome.storage.local.set({
+        currentRun: run,
+        reportDates: run.dateRange,
+        vehicleType: selectedVehicleType,
+        reportQueue: (await getQueue()).map((entry) => entry.id === run.id ? { ...entry, status: 'running' } : entry)
+      });
+      await renderQueue();
+      const results = await executeOnActiveTab(
+        runReportInPage,
+        [run.reportId, run.reportName, run.dateRange.start, run.dateRange.end, selectedVehicleType],
+        false
+      );
+      const result = results.find(({ result: value }) => value)?.result;
+      if (result?.stage !== 'submitted') throw new Error(result?.error || `Could not submit ${run.reportName}.`);
+      status.textContent = `Waiting for ${run.reportName} results (${index + 1} of ${runs.length})…`;
+      if (!await waitForReportResults()) throw new Error(`${run.reportName} did not produce a result table within one minute.`);
+      status.textContent = `Capturing ${run.reportName} (${index + 1} of ${runs.length})…`;
+      batchCaptures.push(await captureCurrentTable());
+      activeRun = null;
+    }
+    await chrome.runtime.sendMessage({ type: 'export-captures', captures: batchCaptures, batch: true });
+    status.textContent = `Captured and exported ${batchCaptures.length} report(s) as one ETL batch.`;
+  } catch (error) {
+    if (activeRun) {
+      const queue = await getQueue();
+      await chrome.storage.local.set({
+        currentRun: null,
+        reportQueue: queue.map((run) => run.id === activeRun.id ? { ...run, status: 'queued' } : run)
+      });
+      await renderQueue();
+    }
+    status.textContent = `Queue stopped: ${error.message}`;
+  } finally {
+    runQueueButton.disabled = false;
+    runNextButton.disabled = false;
+  }
+});
+
 launchReportButton.addEventListener('click', async () => {
   launchReportButton.disabled = true;
   status.textContent = 'Opening report…';
@@ -306,10 +380,7 @@ runReportButton.addEventListener('click', async () => {
   }
 });
 
-captureTableButton.addEventListener('click', async () => {
-  captureTableButton.disabled = true;
-  status.textContent = 'Capturing result table…';
-  try {
+async function captureCurrentTable() {
     const { reportDates, vehicleType, currentRun } = await chrome.storage.local.get(['reportDates', 'vehicleType', 'currentRun']);
     if (!reportDates?.start || !reportDates?.end) throw new Error('Run a report with dates before capturing.');
     const reportName = currentRun?.reportName || 'Dealership Sold Details';
@@ -322,8 +393,7 @@ captureTableButton.addEventListener('click', async () => {
         const values = [...table.querySelectorAll(':scope > tbody > tr, :scope > tr')].flatMap(cellValues);
         if (desiredColumns?.length) return table.matches('table#gvReport') && desiredColumns.some((column) => values.includes(column));
         if (signature?.length) return signature.filter((column) => values.includes(column)).length >= Math.min(4, signature.length);
-        return PROSPECTS_ZIP_COLUMNS.filter((column) => values.includes(column)).length >= 4
-          || values.includes('Date Active') && values.includes('Deal Status');
+        return table.matches('table#gvReport');
       });
       if (!reportTable) return null;
       const sourceRows = [...reportTable.querySelectorAll(':scope > tbody > tr, :scope > tr')];
@@ -357,14 +427,23 @@ captureTableButton.addEventListener('click', async () => {
     const key = `${capturedReportId}|${capturedReportName}|${criteriaValue}|${reportDates.start}|${reportDates.end}`;
     const saved = await chrome.storage.local.get('reportCaptures');
     const captures = saved.reportCaptures || {};
-    captures[key] = { key, reportName: capturedReportName, reportId: capturedReportId, criteria: { vehicleType: criteriaValue }, dateRange: reportDates, capturedAt: new Date().toISOString(), columns, missingColumns, rows };
+    const storedCapture = { key, reportName: capturedReportName, reportId: capturedReportId, criteria: { vehicleType: criteriaValue }, dateRange: reportDates, capturedAt: new Date().toISOString(), columns, missingColumns, rows };
+    captures[key] = storedCapture;
     await chrome.storage.local.set({ reportCaptures: captures });
     if (currentRun) {
       const queue = await getQueue();
       await chrome.storage.local.set({ reportQueue: queue.map((run) => run.id === currentRun.id ? { ...run, status: 'complete' } : run), currentRun: null });
       await renderQueue();
     }
-    status.textContent = `Captured ${Math.max(0, rows.length - 1)} report rows from gvReport${missingColumns.length ? `; missing ${missingColumns.join(', ')}` : ''}.`;
+    return storedCapture;
+}
+
+captureTableButton.addEventListener('click', async () => {
+  captureTableButton.disabled = true;
+  status.textContent = 'Capturing result table…';
+  try {
+    const capture = await captureCurrentTable();
+    status.textContent = `Captured ${Math.max(0, capture.rows.length - 1)} report rows from gvReport${capture.missingColumns.length ? `; missing ${capture.missingColumns.join(', ')}` : ''}.`;
   } catch (error) {
     status.textContent = error.message;
   } finally {
